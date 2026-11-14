@@ -1,209 +1,76 @@
 {
-  "config": {
-    "commitizen": {
-      "path": "cz-conventional-changelog"
-    }
-  },
-  "devDependencies": {
-    "@mdi/svg": "^5.9.55",
-    "@types/chrome": "0.0.154",
-    "@types/copy-webpack-plugin": "^8.0.1",
-    "@types/dotenv-webpack": "^7.0.3",
-    "@types/firefox-webext-browser": "^82.0.1",
-    "@types/glob": "^7.1.4",
-    "@types/jest": "^26.0.24",
-    "@types/node": "^16.4.13",
-    "@types/terser-webpack-plugin": "^5.0.4",
-    "@typescript-eslint/eslint-plugin": "^4.29.0",
-    "@typescript-eslint/parser": "^4.29.0",
-    "commitizen": "^4.2.4",
-    "copy-webpack-plugin": "^9.0.1",
-    "cross-env": "^7.0.2",
-    "csstype": "^3.0.8",
-    "cz-conventional-changelog": "^3.3.0",
-    "dayjs": "^1.10.6",
-    "dotenv-webpack": "^7.0.3",
-    "eslint": "^7.32.0",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-import": "^2.23.4",
-    "eslint-plugin-jsx-a11y": "^6.4.1",
-    "eslint-plugin-react": "^7.24.0",
-    "eslint-plugin-react-hooks": "^4.2.0",
-    "goober": "^2.0.39",
-    "html-webpack-plugin": "^5.3.2",
-    "if-webpack-loader": "^2.0.0",
-    "is-mobile": "^3.0.0",
-    "jest": "^27.0.6",
-    "license-webpack-plugin": "^2.3.20",
-    "microstruct": "^1.0.0",
-    "npm-run-all": "^4.1.5",
-    "preact": "10.5.14",
-    "prettier": "^2.3.2",
-    "rimraf": "^3.0.2",
-    "semantic-release": "^17.4.4",
-    "semantic-release-chrome": "^1.1.3",
-    "semantic-release-firefox-add-on": "^0.2.6",
-    "terser-webpack-plugin": "^5.1.4",
-    "ts-jest": "^27.0.4",
-    "ts-loader": "^9.2.5",
-    "ts-node": "^10.1.0",
-    "typescript": "^4.3.5",
-    "webpack": "^5.49.0",
-    "webpack-cli": "^4.7.2"
-  },
-  "eslintConfig": {
-    "extends": [
-      "eslint:recommended",
-      "plugin:@typescript-eslint/recommended",
-      "plugin:@typescript-eslint/recommended-requiring-type-checking",
-      "plugin:import/errors",
-      "plugin:import/typescript",
-      "plugin:import/warnings",
-      "plugin:jsx-a11y/recommended",
-      "plugin:react/recommended",
-      "plugin:react-hooks/recommended",
-      "prettier"
-    ],
-    "ignorePatterns": [
-      "/dist",
-      "**/*.js"
-    ],
-    "parser": "@typescript-eslint/parser",
-    "parserOptions": {
-      "project": "./tsconfig.json"
-    },
-    "plugins": [
-      "@typescript-eslint"
-    ],
-    "rules": {
-      "object-shorthand": [
-        "warn",
-        "always"
-      ],
-      "sort-imports": [
-        "warn",
-        {
-          "ignoreDeclarationSort": true
-        }
-      ],
-      "import/order": [
-        "warn",
-        {
-          "alphabetize": {
-            "order": "asc"
-          }
-        }
-      ],
-      "react/jsx-sort-props": [
-        "warn",
-        {
-          "callbacksLast": true
-        }
-      ],
-      "react/no-unknown-property": [
-        "error",
-        {
-          "ignore": [
-            "class",
-            "for",
-            "spellcheck"
-          ]
-        }
-      ],
-      "react/prop-types": [
-        "off"
-      ]
-    },
-    "settings": {
-      "react": {
-        "pragma": "h",
-        "version": "16.0"
-      }
-    }
-  },
-  "jest": {
-    "preset": "ts-jest"
-  },
-  "prettier": {
-    "arrowParens": "avoid",
-    "printWidth": 100,
-    "singleQuote": true,
-    "trailingComma": "all"
-  },
+  "name": "ublacklist",
+  "version": "10.1.2",
   "private": true,
-  "release": {
-    "plugins": [
-      "@semantic-release/commit-analyzer",
-      "@semantic-release/release-notes-generator",
-      [
-        "semantic-release-chrome",
-        {
-          "asset": "ublacklist-chrome.zip",
-          "distFolder": "dist/chrome/production",
-          "extensionId": "pncfbmialoiaghdehhbnbhkkgmjanfhe"
-        }
-      ],
-      [
-        "semantic-release-firefox-add-on",
-        {
-          "channel": "listed",
-          "extensionId": "@ublacklist",
-          "sourceDir": "dist/firefox/production",
-          "targetXpi": "ublacklist-firefox.xpi"
-        }
-      ],
-      [
-        "@semantic-release/github",
-        {
-          "assets": [
-            {
-              "name": "ublacklist-${nextRelease.gitTag}-chrome.zip",
-              "path": "ublacklist-chrome.zip"
-            },
-            {
-              "name": "ublacklist-${nextRelease.gitTag}-firefox.xpi",
-              "path": "artifacts/ublacklist-firefox.xpi"
-            }
-          ]
-        }
-      ]
-    ]
+  "type": "module",
+  "imports": {
+    "#builtin/*": "./builtin/*"
   },
   "scripts": {
-    "build": "run-p --print-label build:**",
-    "build:chrome:development": "cross-env BROWSER=chrome NODE_ENV=development webpack --color",
-    "build:chrome:production": "cross-env BROWSER=chrome NODE_ENV=production webpack --color",
-    "build:chrome-mv3:development": "cross-env BROWSER=chrome-mv3 NODE_ENV=development webpack --color",
-    "build:chrome-mv3:production": "cross-env BROWSER=chrome-mv3 NODE_ENV=production webpack --color",
-    "build:firefox:development": "cross-env BROWSER=firefox NODE_ENV=development webpack --color",
-    "build:firefox:production": "cross-env BROWSER=firefox NODE_ENV=production webpack --color",
-    "build:safari:development": "cross-env BROWSER=safari NODE_ENV=development webpack --color",
-    "build:safari:production": "cross-env BROWSER=safari NODE_ENV=production webpack --color",
-    "clean": "run-p --print-label clean:**",
-    "clean:chrome:development": "rimraf dist/chrome/development",
-    "clean:chrome:production": "rimraf dist/chrome/production",
-    "clean:chrome-mv3:development": "rimraf dist/chrome-mv3/development",
-    "clean:chrome-mv3:production": "rimraf dist/chrome-mv3/production",
-    "clean:firefox:development": "rimraf dist/firefox/development",
-    "clean:firefox:production": "rimraf dist/firefox/production",
-    "clean:safari:development": "rimraf dist/safari/development",
-    "clean:safari:production": "rimraf dist/safari/production",
-    "commit": "git-cz",
-    "lint": "run-p --print-label lint:*",
-    "lint:eslint": "eslint --color .",
-    "lint:prettier": "prettier --check --color --loglevel warn .",
-    "lintfix": "run-s --print-label lintfix:*",
-    "lintfix:eslint": "eslint --color --fix .",
-    "lintfix:prettier": "prettier --color --loglevel warn --write .",
-    "test": "jest",
-    "watch": "run-p --print-label watch:**",
-    "watch:chrome:development": "cross-env BROWSER=chrome NODE_ENV=development webpack --color --watch",
-    "watch:chrome:production": "cross-env BROWSER=chrome NODE_ENV=production webpack --color --watch",
-    "watch:chrome-mv3:development": "cross-env BROWSER=chrome-mv3 NODE_ENV=development webpack --color --watch",
-    "watch:chrome-mv3:production": "cross-env BROWSER=chrome-mv3 NODE_ENV=production webpack --color --watch",
-    "watch:firefox:development": "cross-env BROWSER=firefox NODE_ENV=development webpack --color --watch",
-    "watch:firefox:production": "cross-env BROWSER=firefox NODE_ENV=production webpack --color --watch",
-    "watch:safari:development": "cross-env BROWSER=safari NODE_ENV=development webpack --color --watch",
-    "watch:safari:production": "cross-env BROWSER=safari NODE_ENV=production webpack --color --watch"
-  }
+    "build": "node scripts/build.ts",
+    "check": "pnpm run /^check:/",
+    "check:lint": "oxlint",
+    "check:format": "oxfmt --check",
+    "e2e": "pnpm build --e2e && playwright test --config e2e/playwright.config.ts",
+    "fix": "pnpm run /^fix:/",
+    "fix:lint": "oxlint --fix",
+    "fix:format": "oxfmt",
+    "generate": "pnpm run /^generate:/",
+    "generate:languages": "node scripts/generate-languages.ts",
+    "generate:message-names": "node scripts/generate-message-names.ts",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.9.0",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-yaml": "6.1.3",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/lint": "6.9.7",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@lezer/highlight": "1.2.5",
+    "@mdi/svg": "7.4.47",
+    "@neodrag/vanilla": "2.3.1",
+    "@sindresorhus/fnv1a": "3.1.0",
+    "@ublacklist/match-pattern": "2.0.0",
+    "@ublacklist/ruleset": "2.0.1",
+    "@ublacklist/serpinfo": "3.0.0",
+    "clsx": "2.1.1",
+    "colord": "2.12.0",
+    "css-tree": "3.2.1",
+    "es-toolkit": "1.53.2",
+    "is-mobile": "5.0.0",
+    "lz-string": "1.5.0",
+    "punycode": "2.3.1",
+    "react": "19.3.1",
+    "react-colorful": "5.8.1",
+    "react-dom": "19.3.1",
+    "tldts": "7.4.21",
+    "zod": "4.6.7",
+    "zustand": "5.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/css-tree": "3.2.0",
+    "@types/node": "26.6.6",
+    "@types/punycode": "2.1.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "chrome-types": "0.1.463",
+    "csstype": "3.2.3",
+    "esbuild": "0.28.2",
+    "js-yaml": "5.5.0",
+    "lefthook": "2.2.1",
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.13.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.18.0"
 }

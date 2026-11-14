@@ -1,60 +1,58 @@
-import { FunctionComponent, h } from 'preact';
-import { StateUpdater, useEffect, useState } from 'preact/hooks';
-import { searchEngineMatches } from '../../common/search-engines';
-import { apis } from '../apis';
-import { Button, LinkButton } from '../components/button';
-import { CheckBox } from '../components/checkbox';
-import { FOCUS_END_CLASS, FOCUS_START_CLASS } from '../components/constants';
-import {
-  Dialog,
-  DialogBody,
-  DialogFooter,
-  DialogHeader,
-  DialogProps,
-  DialogTitle,
-} from '../components/dialog';
-import { Indent } from '../components/indent';
-import { ControlLabel, Label, LabelWrapper, SubLabel } from '../components/label';
-import { expandLinks } from '../components/link';
-import { List, ListItem } from '../components/list';
-import { Portal } from '../components/portal';
-import { Row, RowItem } from '../components/row';
-import {
-  Section,
-  SectionBody,
-  SectionHeader,
-  SectionItem,
-  SectionTitle,
-} from '../components/section';
-import { Text } from '../components/text';
-import { TextArea } from '../components/textarea';
-import { usePrevious } from '../components/utilities';
-import { addMessageListeners, sendMessage } from '../messages';
-import { searchEngineMessageNames } from '../search-engines/message-names';
-import { MessageName0, SearchEngineId } from '../types';
-import { lines, stringEntries, translate } from '../utilities';
-import { useOptionsContext } from './options-context';
-import { Select, SelectOption } from './select';
-import { SetBooleanItem } from './set-boolean-item';
+import { Button } from "@base-ui/react/button";
+import { Checkbox } from "@base-ui/react/checkbox";
+import openInNewSVG from "@mdi/svg/svg/open-in-new.svg";
+import clsx from "clsx";
+import type React from "react";
+import { useEffect, useId, useState } from "react";
 
-const ImportBlacklistDialog: FunctionComponent<
-  { setBlacklist: StateUpdater<string>; setBlacklistDirty: StateUpdater<boolean> } & DialogProps
-> = ({ close, open, setBlacklist, setBlacklistDirty }) => {
-  const [state, setState] = useState({
-    source: 'file' as 'file' | 'pb',
-    pb: '',
-    append: false,
-  });
-  const prevOpen = usePrevious(open);
-  if (open && !prevOpen) {
-    state.source = 'file';
-    state.pb = '';
-    state.append = false;
-  }
+import { Dialog, DialogTitle } from "../components/dialog.tsx";
+import { Link } from "../components/link.tsx";
+import { Select, SelectOption } from "../components/select.tsx";
+import { SvgIcon } from "../components/svg-icon.tsx";
+import { saveToLocalStorage } from "../shared/local-storage.ts";
+import { translate } from "../shared/locales.ts";
+import { addMessageListeners, sendMessage } from "../shared/messages.ts";
+import { storageStore } from "../shared/storage-store.ts";
+import {
+  downloadTextFile,
+  lines,
+  uploadTextFile,
+} from "../shared/utilities.ts";
+import { RulesetEditor } from "./shared/ruleset-editor.tsx";
+import { saveSource } from "./shared/save-source.ts";
+import { SetBooleanItem } from "./shared/set-boolean-item.tsx";
+
+import buttonStyles from "../styles/button.module.css";
+import styles from "../styles/checkbox.module.css";
+import dialogStyles from "../styles/dialog.module.css";
+import iconButtonStyles from "../styles/icon-button.module.css";
+import indentStyles from "../styles/indent.module.css";
+import labelStyles from "../styles/label.module.css";
+import rowStyles from "../styles/row.module.css";
+import sectionStyles from "../styles/section.module.css";
+import textStyles from "../styles/text.module.css";
+import textareaStyles from "../styles/textarea.module.css";
+
+function ImportBlacklistForm({
+  close,
+  setBlacklist,
+  setBlacklistDirty,
+}: {
+  close: () => void;
+  setBlacklist: React.Dispatch<React.SetStateAction<string>>;
+  setBlacklistDirty: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const id = useId();
+  const [source, setSource] = useState<"file" | "pb">("file");
+  const [pb, setPB] = useState("");
+  const [append, setAppend] = useState(false);
   const replaceOrAppend = (newBlacklist: string) => {
-    if (state.append) {
+    if (append) {
       setBlacklist(
-        oldBlacklist => `${oldBlacklist}${oldBlacklist && newBlacklist ? '\n' : ''}${newBlacklist}`,
+        (oldBlacklist) =>
+          `${oldBlacklist}${
+            oldBlacklist && newBlacklist ? "\n" : ""
+          }${newBlacklist}`,
       );
     } else {
       setBlacklist(() => newBlacklist);
@@ -63,143 +61,186 @@ const ImportBlacklistDialog: FunctionComponent<
   };
 
   return (
-    <Dialog aria-labelledby="importBlacklistDialogTitle" close={close} open={open}>
-      <DialogHeader>
-        <DialogTitle id="importBlacklistDialogTitle">
-          {translate('options_importBlacklistDialog_title')}
+    <>
+      <div className={dialogStyles.header}>
+        <DialogTitle>
+          {translate("options_importBlacklistDialog_title")}
         </DialogTitle>
-      </DialogHeader>
-      <DialogBody>
-        <Row>
-          <RowItem>
+      </div>
+      <div>
+        <div className={rowStyles.row}>
+          <div className={rowStyles.rowItem}>
             <Select
-              class={FOCUS_START_CLASS}
-              value={state.source}
-              onInput={e =>
-                setState(s => ({ ...s, source: e.currentTarget.value as 'file' | 'pb' }))
-              }
+              value={source}
+              onValueChange={(value) => {
+                setSource(value as "file" | "pb");
+              }}
             >
               <SelectOption value="file">
-                {translate('options_importBlacklistDialog_fromFile')}
+                {translate("options_importBlacklistDialog_fromFile")}
               </SelectOption>
               <SelectOption value="pb">
-                {translate('options_importBlacklistDialog_fromPB')}
+                {translate("options_importBlacklistDialog_fromPB")}
               </SelectOption>
             </Select>
-          </RowItem>
-        </Row>
-        {state.source === 'pb' && (
-          <Row>
-            <RowItem expanded>
-              <LabelWrapper fullWidth>
-                <SubLabel>{translate('options_importBlacklistDialog_helper')}</SubLabel>
-                <SubLabel>{translate('options_blacklistExample', 'example.com')}</SubLabel>
-              </LabelWrapper>
-              <TextArea
-                aria-label={translate('options_importBlacklistDialog_pbLabel')}
+          </div>
+        </div>
+        {source === "pb" && (
+          <div className={rowStyles.row}>
+            <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+              <div className={clsx(labelStyles.wrapper, labelStyles.fullWidth)}>
+                <div className={labelStyles.subLabel}>
+                  {translate("options_importBlacklistDialog_helper")}
+                </div>
+                <div className={labelStyles.subLabel}>
+                  {translate("options_blacklistExample", "example.com")}
+                </div>
+              </div>
+              <textarea
+                aria-label={translate("options_importBlacklistDialog_pbLabel")}
+                className={textareaStyles.textArea}
                 rows={5}
-                spellcheck={false}
-                value={state.pb}
+                style={{ height: "calc(1.5em * 5 + 1em + 2px)" }}
+                spellCheck="false"
+                value={pb}
                 wrap="off"
-                onInput={e => setState(s => ({ ...s, pb: e.currentTarget.value }))}
+                onChange={(e) => {
+                  setPB(e.currentTarget.value);
+                }}
               />
-            </RowItem>
-          </Row>
+            </div>
+          </div>
         )}
-        <Row>
-          <RowItem>
-            <Indent>
-              <CheckBox
-                checked={state.append}
-                id="append"
-                onInput={e => setState(s => ({ ...s, append: e.currentTarget.checked }))}
-              />
-            </Indent>
-          </RowItem>
-          <RowItem expanded>
-            <LabelWrapper>
-              <ControlLabel for="append">
-                {translate('options_importBlacklistDialog_append')}
-              </ControlLabel>
-            </LabelWrapper>
-          </RowItem>
-        </Row>
-      </DialogBody>
-      <DialogFooter>
-        <Row right>
-          <RowItem>
+        <div className={rowStyles.row}>
+          <div className={rowStyles.rowItem}>
+            <div className={indentStyles.indent}>
+              <Checkbox.Root
+                checked={append}
+                className={styles.checkbox}
+                id={`${id}-append`}
+                onCheckedChange={setAppend}
+              >
+                <Checkbox.Indicator className={styles.indicator} />
+              </Checkbox.Root>
+            </div>
+          </div>
+          <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+            <div className={labelStyles.wrapper}>
+              <label
+                className={labelStyles.controlLabel}
+                htmlFor={`${id}-append`}
+              >
+                {translate("options_importBlacklistDialog_append")}
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className={dialogStyles.footer}>
+        <div className={clsx(rowStyles.row, rowStyles.right)}>
+          <div className={rowStyles.rowItem}>
             <Button
-              class={state.source === 'pb' && !state.pb ? FOCUS_END_CLASS : undefined}
+              className={clsx(buttonStyles.button, buttonStyles.secondary)}
               onClick={close}
             >
-              {translate('cancelButton')}
+              {translate("cancelButton")}
             </Button>
-          </RowItem>
-          <RowItem>
-            {state.source === 'file' ? (
+          </div>
+          <div className={rowStyles.rowItem}>
+            {source === "file" ? (
               <Button
-                class={FOCUS_END_CLASS}
-                primary
-                onClick={() => {
-                  const fileInput = document.createElement('input');
-                  fileInput.accept = 'text/plain';
-                  fileInput.type = 'file';
-                  fileInput.addEventListener('input', () => {
-                    const file = fileInput.files?.[0];
-                    if (!file) {
-                      return;
-                    }
-                    const fileReader = new FileReader();
-                    fileReader.addEventListener('load', () => {
-                      replaceOrAppend(fileReader.result as string);
-                    });
-                    fileReader.readAsText(file);
-                    close();
-                  });
-                  fileInput.click();
+                className={clsx(buttonStyles.button, buttonStyles.primary)}
+                onClick={async () => {
+                  const text = await uploadTextFile("text/plain");
+                  if (text == null) {
+                    return;
+                  }
+                  replaceOrAppend(text);
+                  close();
                 }}
               >
-                {translate('options_importBlacklistDialog_selectFile')}
+                {translate("options_importBlacklistDialog_selectFile")}
               </Button>
             ) : (
               <Button
-                class={state.pb ? FOCUS_END_CLASS : undefined}
-                disabled={!state.pb}
-                primary
+                className={clsx(buttonStyles.button, buttonStyles.primary)}
+                disabled={!pb}
                 onClick={() => {
-                  let newBlacklist = '';
-                  for (const domain of lines(state.pb)) {
+                  let newBlacklist = "";
+                  for (const domain of lines(pb)) {
                     if (/^([A-Za-z0-9-]+\.)*[A-Za-z0-9-]+$/.test(domain)) {
-                      newBlacklist = `${newBlacklist}${newBlacklist ? '\n' : ''}*://*.${domain}/*`;
+                      newBlacklist = `${newBlacklist}${
+                        newBlacklist ? "\n" : ""
+                      }*://*.${domain}/*`;
                     }
                   }
                   replaceOrAppend(newBlacklist);
                   close();
                 }}
               >
-                {translate('options_importBlacklistDialog_importButton')}
+                {translate("options_importBlacklistDialog_importButton")}
               </Button>
             )}
-          </RowItem>
-        </Row>
-      </DialogFooter>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ImportBlacklistDialog({
+  close,
+  open,
+  setBlacklist,
+  setBlacklistDirty,
+}: {
+  close: () => void;
+  open: boolean;
+  setBlacklist: React.Dispatch<React.SetStateAction<string>>;
+  setBlacklistDirty: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  return (
+    <Dialog close={close} open={open}>
+      <ImportBlacklistForm
+        close={close}
+        setBlacklist={setBlacklist}
+        setBlacklistDirty={setBlacklistDirty}
+      />
     </Dialog>
   );
-};
+}
 
-const SetBlacklist: FunctionComponent = () => {
-  const {
-    initialItems: { blacklist: initialBlacklist },
-  } = useOptionsContext();
-  const [blacklist, setBlacklist] = useState(initialBlacklist);
+function expandLinks(text: string): React.ReactNode {
+  const children: React.ReactNode[] = [];
+  const split = text.split(/\[([^\]]*)]\(([^)]*)\)/g);
+  for (let i = 0; i < split.length; ++i) {
+    if (i % 3 === 0) {
+      children.push(split[i]);
+    } else if (i % 3 === 1) {
+      children.push(
+        <Link href={split[i + 1]} key={i}>
+          {split[i]}
+        </Link>,
+      );
+      ++i;
+    }
+  }
+  return <>{children}</>;
+}
+
+function SetBlacklist() {
+  const [blacklist, setBlacklist] = useState(
+    () => storageStore.get().blacklist,
+  );
   const [blacklistDirty, setBlacklistDirty] = useState(false);
   const [latestBlacklist, setLatestBlacklist] = useState<string | null>(null);
-  const [importBlacklistDialogOpen, setImportBlacklistDialogOpen] = useState(false);
+  const [importBlacklistDialogOpen, setImportBlacklistDialogOpen] =
+    useState(false);
   useEffect(
     () =>
       addMessageListeners({
-        'blacklist-set': (latestBlacklist, source) => {
-          if (source !== 'options') {
+        "blocklist-saved": (latestBlacklist, source) => {
+          if (source !== saveSource) {
             setLatestBlacklist(latestBlacklist);
           }
         },
@@ -207,188 +248,196 @@ const SetBlacklist: FunctionComponent = () => {
     [],
   );
   return (
-    <SectionItem>
-      <Row>
-        <RowItem expanded>
-          <LabelWrapper fullWidth>
-            <ControlLabel for="blacklist">{translate('options_blacklistLabel')}</ControlLabel>
-            <SubLabel>{expandLinks(translate('options_blacklistHelper'))}</SubLabel>
-            <SubLabel>{translate('options_blockByTitle')}</SubLabel>
-            <SubLabel>{translate('options_blacklistExample', '*://*.example.com/*')}</SubLabel>
-            <SubLabel>{translate('options_blacklistExample', '/example\\.(net|org)/')}</SubLabel>
-            <SubLabel>{translate('options_blacklistExample', 'title/Example Domain/')}</SubLabel>
-          </LabelWrapper>
-          <TextArea
-            id="blacklist"
-            rows={10}
-            spellcheck={false}
+    <div className={sectionStyles.item}>
+      <div className={rowStyles.row}>
+        <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+          <div className={clsx(labelStyles.wrapper, labelStyles.fullWidth)}>
+            <div className={labelStyles.label}>
+              {translate("options_blacklistLabel")}
+            </div>
+            <div className={labelStyles.subLabel}>
+              {expandLinks(translate("options_blacklistHelper"))}
+            </div>
+            <div className={labelStyles.subLabel}>
+              {translate("options_blockByTitle")}
+            </div>
+            <div className={labelStyles.subLabel}>
+              {translate("options_blacklistExample", "*://*.example.com/*")}
+            </div>
+            <div className={labelStyles.subLabel}>
+              {translate("options_blacklistExample", "/example\\.(net|org)/")}
+            </div>
+            <div className={labelStyles.subLabel}>
+              {translate("options_blacklistExample", "title/Example Domain/")}
+            </div>
+          </div>
+          <RulesetEditor
+            height="calc(21em + 10px)"
+            resizable
             value={blacklist}
-            wrap="off"
-            onInput={e => {
-              setBlacklist(e.currentTarget.value);
+            onChange={(value) => {
+              setBlacklist(value);
               setBlacklistDirty(true);
             }}
           />
-        </RowItem>
-      </Row>
-      <Row multiline right>
+        </div>
+      </div>
+      <div
+        className={clsx(rowStyles.row, rowStyles.multiline, rowStyles.right)}
+      >
         {latestBlacklist != null && (
-          <RowItem expanded>
-            <Text>
-              {translate('options_blacklistUpdated')}{' '}
-              <LinkButton
+          <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+            <span className={textStyles.secondary}>
+              {translate("options_blacklistUpdated")}{" "}
+              <Button
+                className={buttonStyles.linkButton}
                 onClick={() => {
                   setBlacklist(latestBlacklist);
                   setBlacklistDirty(false);
                   setLatestBlacklist(null);
                 }}
               >
-                {translate('options_reloadBlacklistButton')}
-              </LinkButton>
-            </Text>
-          </RowItem>
+                {translate("options_reloadBlacklistButton")}
+              </Button>
+            </span>
+          </div>
         )}
-        <RowItem>
-          <Row>
-            <RowItem>
+        <div className={rowStyles.rowItem}>
+          <div className={rowStyles.row}>
+            <div className={rowStyles.rowItem}>
               <Button
+                className={clsx(buttonStyles.button, buttonStyles.secondary)}
                 onClick={() => {
                   setImportBlacklistDialogOpen(true);
                 }}
               >
-                {translate('options_importBlacklistButton')}
+                {translate("options_importBlacklistButton")}
               </Button>
-            </RowItem>
-            <RowItem>
+            </div>
+            <div className={rowStyles.rowItem}>
               <Button
+                className={clsx(buttonStyles.button, buttonStyles.secondary)}
                 onClick={() => {
-                  const a = document.createElement('a');
-                  a.href = `data:text/plain;charset=UTF-8,${encodeURIComponent(blacklist)}`;
-                  a.download = 'uBlacklist.txt';
-                  a.click();
+                  downloadTextFile(
+                    "uBlacklist.txt",
+                    "text/plain;charset=UTF-8",
+                    blacklist,
+                  );
                 }}
               >
-                {translate('options_exportBlacklistButton')}
+                {translate("options_exportBlacklistButton")}
               </Button>
-            </RowItem>
-            <RowItem>
+            </div>
+            <div className={rowStyles.rowItem}>
               <Button
+                className={clsx(buttonStyles.button, buttonStyles.primary)}
+                data-testid="save-blacklist-button"
                 disabled={!blacklistDirty}
-                primary
                 onClick={() => {
-                  void sendMessage('set-blacklist', blacklist, 'options');
+                  void saveToLocalStorage({ blacklist }, saveSource);
                   setBlacklistDirty(false);
                   setLatestBlacklist(null);
                 }}
               >
-                {translate('options_saveBlacklistButton')}
+                {translate("options_saveBlacklistButton")}
               </Button>
-            </RowItem>
-          </Row>
-        </RowItem>
-      </Row>
-      <Portal id="importBlacklistDialogPortal">
-        <ImportBlacklistDialog
-          close={() => setImportBlacklistDialogOpen(false)}
-          open={importBlacklistDialogOpen}
-          setBlacklist={setBlacklist}
-          setBlacklistDirty={setBlacklistDirty}
-        />
-      </Portal>
-    </SectionItem>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ImportBlacklistDialog
+        close={() => setImportBlacklistDialogOpen(false)}
+        open={importBlacklistDialogOpen}
+        setBlacklist={setBlacklist}
+        setBlacklistDirty={setBlacklistDirty}
+      />
+    </div>
   );
-};
+}
 
-const RegisterSearchEngine: FunctionComponent<{
-  id: SearchEngineId;
-  matches: string[];
-  messageNames: { name: MessageName0 };
-}> = ({ id, matches, messageNames }) => {
-  const [registered, setRegistered] = useState(false);
-  useEffect(() => {
-    void (async () => {
-      const registered = await apis.permissions.contains({ origins: matches });
-      setRegistered(registered);
-    })();
-  }, [matches]);
+function RegisterSearchEngines() {
   return (
-    <Row>
-      <RowItem expanded>{translate(messageNames.name)}</RowItem>
-      <RowItem>
-        {registered ? (
-          <Button disabled>{translate('options_searchEngineRegistered')}</Button>
-        ) : (
-          <Button
-            onClick={async () => {
-              const registered = await apis.permissions.request({
-                origins: matches,
-              });
-              if (registered) {
-                void sendMessage('register-search-engine', id);
-              }
-              setRegistered(registered);
+    <div className={sectionStyles.item}>
+      <div className={rowStyles.row}>
+        <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+          <div className={labelStyles.wrapper}>
+            <div className={labelStyles.label}>
+              {translate("options_otherSearchEngines")}
+            </div>
+            <div className={labelStyles.subLabel}>
+              {translate("options_otherSearchEnginesDescription")}
+            </div>
+          </div>
+        </div>
+        <div className={rowStyles.rowItem}>
+          <button
+            className={iconButtonStyles.button}
+            type="button"
+            aria-label={translate("options_openSerpInfoOptionsButton")}
+            onClick={() => {
+              void sendMessage("open-serpinfo-options-page");
             }}
           >
-            {translate('options_registerSearchEngine')}
-          </Button>
-        )}
-      </RowItem>
-    </Row>
+            <SvgIcon
+              color="var(--ub-color-text-secondary)"
+              svg={openInNewSVG}
+            />
+          </button>
+        </div>
+      </div>
+    </div>
   );
-};
+}
 
-const RegisterSearchEngines: FunctionComponent = () => {
-  /* #if CHROME_MV3 || SAFARI
-  return null;
-  */
-  // #else
+export function GeneralSection(props: { id: string }) {
+  const id = useId();
   return (
-    <SectionItem>
-      <Row>
-        <RowItem expanded>
-          <LabelWrapper>
-            <Label>{translate('options_otherSearchEngines')}</Label>
-            <SubLabel>{translate('options_otherSearchEnginesDescription')}</SubLabel>
-          </LabelWrapper>
-        </RowItem>
-      </Row>
-      <Row>
-        <RowItem>
-          <Indent />
-        </RowItem>
-        <RowItem expanded>
-          <List>
-            {stringEntries(searchEngineMatches).map(
-              ([id, matches]) =>
-                id !== 'google' && (
-                  <ListItem key={id}>
-                    <RegisterSearchEngine
-                      id={id}
-                      matches={matches}
-                      messageNames={searchEngineMessageNames[id]}
-                    />
-                  </ListItem>
-                ),
-            )}
-          </List>
-        </RowItem>
-      </Row>
-    </SectionItem>
+    <section
+      className={sectionStyles.section}
+      aria-labelledby={`${id}-title`}
+      id={props.id}
+    >
+      <div className={sectionStyles.header}>
+        <h1 className={sectionStyles.title} id={`${id}-title`}>
+          {translate("options_generalTitle")}
+        </h1>
+      </div>
+      <div className={sectionStyles.body}>
+        <SetBlacklist />
+        <RegisterSearchEngines />
+        <div className={sectionStyles.item}>
+          <SetBooleanItem
+            itemKey="blockWholeSite"
+            label={translate("options_blockWholeSiteLabel")}
+            subLabels={[translate("options_blockWholeSiteDescription")]}
+          />
+        </div>
+        <div className={sectionStyles.item}>
+          <SetBooleanItem
+            itemKey="enableMatchingRules"
+            label={translate("options_enableMatchingRules")}
+          />
+        </div>
+        <div className={sectionStyles.item}>
+          <SetBooleanItem
+            itemKey="skipBlockDialog"
+            label={translate("options_skipBlockDialogLabel")}
+            subLabels={[translate("options_skipBlockDialogDescription")]}
+          />
+        </div>
+        <div className={sectionStyles.item}>
+          <SetBooleanItem
+            itemKey="hideBlockLinks"
+            label={translate("options_hideBlockButtonsLabel")}
+          />
+        </div>
+        <div className={sectionStyles.item}>
+          <SetBooleanItem
+            itemKey="hideControl"
+            label={translate("options_hideControlLabel")}
+          />
+        </div>
+      </div>
+    </section>
   );
-  // #endif
-};
-
-export const GeneralSection: FunctionComponent = () => (
-  <Section aria-labelledby="generalSectionTitle" id="general">
-    <SectionHeader>
-      <SectionTitle id="generalSectionTitle">{translate('options_generalTitle')}</SectionTitle>
-    </SectionHeader>
-    <SectionBody>
-      <SetBlacklist />
-      <RegisterSearchEngines />
-      <SetBooleanItem itemKey="skipBlockDialog" label={translate('options_skipBlockDialogLabel')} />
-      <SetBooleanItem itemKey="hideBlockLinks" label={translate('options_hideBlockLinksLabel')} />
-      <SetBooleanItem itemKey="hideControl" label={translate('options_hideControlLabel')} />
-    </SectionBody>
-  </Section>
-);
+}

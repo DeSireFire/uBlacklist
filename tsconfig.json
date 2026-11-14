@@ -1,16 +1,29 @@
 {
+  "include": ["src", "scripts", "e2e", "release"],
+
   "compilerOptions": {
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "jsx": "react",
-    "jsxFactory": "h",
-    "jsxFragmentFactory": "Fragment",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "newLine": "LF",
-    "sourceMap": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ES2019"
+    // Type Checking
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+
+    // Modules
+    "allowImportingTsExtensions": true,
+    "module": "preserve",
+    "types": ["*", "chrome-types"],
+
+    // Emit
+    "noEmit": true,
+
+    // Interop Constraints
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    // Language and Environment
+    "jsx": "react-jsx",
+    "target": "esnext",
+
+    // Completeness
+    "skipLibCheck": true
   }
 }

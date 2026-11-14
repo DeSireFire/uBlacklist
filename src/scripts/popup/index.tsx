@@ -1,0 +1,242 @@
+import "../styles/theme.css";
+import "../styles/baseline.css";
+import { Button } from "@base-ui/react/button";
+import cog from "@mdi/svg/svg/cog.svg";
+import clsx from "clsx";
+import isMobile from "is-mobile";
+import { useEffect, useId, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+
+import icon from "../../icons/icon.svg";
+import {
+  BlockForm,
+  type BlockFormProps,
+  isProcessableUrl,
+} from "../block-dialog.ts";
+import { SvgIcon } from "../components/svg-icon.tsx";
+import { AutoThemeProvider } from "../components/theme.tsx";
+import { browser } from "../shared/browser.ts";
+import {
+  loadFromLocalStorage,
+  saveToLocalStorage,
+} from "../shared/local-storage.ts";
+import { getLocale, translate } from "../shared/locales.ts";
+import { sendMessage, sendMessageToTab } from "../shared/messages.ts";
+import { createInteractiveRuleset } from "../shared/utilities.ts";
+import { PopupDialog } from "./dialog.tsx";
+import {
+  canEnableSerpInfo,
+  EnableSerpInfoPopupDialog,
+  SerpInfoPopupDialog,
+} from "./serpinfo.tsx";
+
+import buttonStyles from "../styles/button.module.css";
+import dialogStyles from "../styles/dialog.module.css";
+import iconButtonStyles from "../styles/icon-button.module.css";
+import rowStyles from "../styles/row.module.css";
+import styles from "./index.module.css";
+
+async function openOptionsPage(): Promise<void> {
+  await sendMessage("open-options-page");
+  // https://github.com/iorate/ublacklist/issues/378
+  if (process.env.BROWSER === "firefox" || process.env.BROWSER === "edge") {
+    window.close();
+  }
+}
+
+function Loading() {
+  return <div className={styles.loading} />;
+}
+
+function CannotBlockPopupDialog({ url }: { url: string | null }) {
+  const id = useId();
+  const initialFocusRef = useRef<HTMLButtonElement>(null);
+  return (
+    <PopupDialog
+      aria-labelledby={`${id}-title`}
+      close={() => window.close()}
+      initialFocus={initialFocusRef}
+    >
+      <div className={dialogStyles.header}>
+        <h2 className={dialogStyles.title} id={`${id}-title`}>
+          <div className={rowStyles.row}>
+            <div className={rowStyles.rowItem}>
+              <SvgIcon svg={icon} />
+            </div>
+            <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+              {translate("popup_cannotBlockPage")}
+            </div>
+          </div>
+        </h2>
+      </div>
+      {url != null && (
+        <div className={rowStyles.row}>
+          <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+            <span className={styles.url}>{url}</span>
+          </div>
+        </div>
+      )}
+      <div className={dialogStyles.footer}>
+        <div
+          className={clsx(rowStyles.row, rowStyles.multiline, rowStyles.right)}
+        >
+          <div className={clsx(rowStyles.rowItem, rowStyles.expanded)}>
+            <button
+              aria-label={translate("popup_openOptionsLink")}
+              className={iconButtonStyles.button}
+              title={translate("popup_openOptionsLink")}
+              type="button"
+              onClick={() => {
+                void openOptionsPage();
+              }}
+            >
+              <SvgIcon color="var(--ub-color-text-secondary)" svg={cog} />
+            </button>
+          </div>
+          <div className={rowStyles.rowItem}>
+            <Button
+              className={clsx(buttonStyles.button, buttonStyles.primary)}
+              ref={initialFocusRef}
+              onClick={() => window.close()}
+            >
+              {translate("okButton")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </PopupDialog>
+  );
+}
+
+type BlockPopupDialogProps = Omit<
+  BlockFormProps,
+  "id" | "initialFocusRef" | "portalContainer"
+>;
+
+function BlockPopupDialog(props: BlockPopupDialogProps) {
+  const id = useId();
+  const initialFocusRef = useRef<HTMLButtonElement>(null);
+  return (
+    <PopupDialog
+      aria-labelledby={`${id}-title`}
+      close={props.close}
+      initialFocus={initialFocusRef}
+    >
+      <BlockForm id={id} initialFocusRef={initialFocusRef} {...props} />
+    </PopupDialog>
+  );
+}
+
+async function queryUserAgent(tabId: number): Promise<string> {
+  const [result] = await browser.scripting.executeScript({
+    target: { tabId },
+    func: () => window.navigator.userAgent,
+    injectImmediately: true,
+  });
+  if (!result || typeof result.result !== "string") {
+    throw new Error("Failed to get user agent");
+  }
+  return result.result;
+}
+
+function Popup() {
+  const [state, setState] = useState<
+    | { type: "loading" }
+    | { type: "cannotBlock"; url: string | null }
+    | {
+        type: "serpInfo";
+        props: React.ComponentProps<typeof SerpInfoPopupDialog>;
+      }
+    | { type: "enableSerpInfo" }
+    | { type: "block"; props: BlockPopupDialogProps }
+  >({ type: "loading" });
+  useEffect(() => {
+    void (async () => {
+      const {
+        id: tabId,
+        url,
+        title = null,
+      } = (await browser.tabs.query({ active: true, currentWindow: true }))[0]!;
+      if (tabId == null || url == null || !isProcessableUrl(url)) {
+        setState({ type: "cannotBlock", url: url ?? null });
+        return;
+      }
+      try {
+        const hideBlockedResults = await sendMessageToTab(
+          tabId,
+          "get-hide-blocked-results",
+        );
+        setState({
+          type: "serpInfo",
+          props: {
+            tabId,
+            initialHideBlockedResults: hideBlockedResults,
+          },
+        });
+        return;
+      } catch {
+        // SERPINFO mode is not applied
+      }
+      try {
+        const userAgent = await queryUserAgent(tabId);
+        const mobile = isMobile({ ua: userAgent });
+        if (await canEnableSerpInfo(url, mobile)) {
+          setState({ type: "enableSerpInfo" });
+          return;
+        }
+      } catch {
+        // Should not happen
+      }
+      const options = await loadFromLocalStorage([
+        "ruleset",
+        "blacklist",
+        "subscriptions",
+        "blockWholeSite",
+        "enableMatchingRules",
+      ]);
+      const ruleset = createInteractiveRuleset(
+        options.blacklist,
+        options.ruleset,
+        options.subscriptions,
+      );
+      setState({
+        type: "block",
+        props: {
+          blockWholeSite: options.blockWholeSite,
+          close: () => window.close(),
+          enableMatchingRules: options.enableMatchingRules,
+          openOptionsPage,
+          ruleset,
+          searchResult: { url, props: title != null ? { title } : {} },
+          onBlocked: (newSource) =>
+            saveToLocalStorage({ blacklist: newSource }, "popup"),
+        },
+      });
+    })();
+  }, []);
+  return (
+    <AutoThemeProvider>
+      {state.type === "loading" ? (
+        <Loading />
+      ) : state.type === "cannotBlock" ? (
+        <CannotBlockPopupDialog url={state.url} />
+      ) : state.type === "serpInfo" ? (
+        <SerpInfoPopupDialog {...state.props} />
+      ) : state.type === "enableSerpInfo" ? (
+        <EnableSerpInfoPopupDialog />
+      ) : (
+        <BlockPopupDialog {...state.props} />
+      )}
+    </AutoThemeProvider>
+  );
+}
+
+function main(): void {
+  document.documentElement.lang = getLocale();
+  const root = createRoot(
+    document.body.appendChild(document.createElement("div")),
+  );
+  root.render(<Popup />);
+}
+
+main();

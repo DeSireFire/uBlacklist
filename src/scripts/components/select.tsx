@@ -1,100 +1,81 @@
-import menuDown from '@mdi/svg/svg/menu-down.svg';
-import { JSX, createContext, h } from 'preact';
-import { forwardRef } from 'preact/compat';
-import { Ref, useContext, useMemo } from 'preact/hooks';
-import { DISABLED_OPACITY } from './constants';
-import { applyClass } from './helpers';
-import { TemplateIcon } from './icon';
-import { useCSS } from './styles';
-import { useTheme } from './theme';
+import { Select as BaseSelect } from "@base-ui/react/select";
+import menuDown from "@mdi/svg/svg/menu-down.svg";
+import React from "react";
 
-type SelectContextValue = { native?: boolean };
+import { mergeClassNames } from "./merge-props.ts";
+import { SvgIcon } from "./svg-icon.tsx";
 
-const SelectContext = createContext<SelectContextValue | null>(null);
+import styles from "./select.module.css";
 
-function useSelectContext(): SelectContextValue {
-  const value = useContext(SelectContext);
-  if (!value) {
-    throw new Error('useSelectContext: no matching provider');
-  }
-  return value;
+export type SelectProps = Omit<
+  BaseSelect.Trigger.Props,
+  "children" | "value"
+> & {
+  children?: React.ReactNode;
+  value?: string;
+  onValueChange?: (value: string) => void;
+};
+
+export function Select({
+  children,
+  className,
+  value,
+  onValueChange,
+  ...props
+}: SelectProps) {
+  const items = React.Children.toArray(children).flatMap((child) =>
+    React.isValidElement<SelectOptionProps>(child) && child.props.value != null
+      ? [{ value: child.props.value, label: child.props.children }]
+      : [],
+  );
+  return (
+    <BaseSelect.Root
+      items={items}
+      value={value}
+      onValueChange={(newValue) => {
+        if (newValue != null) {
+          onValueChange?.(newValue);
+        }
+      }}
+    >
+      <BaseSelect.Trigger
+        {...props}
+        className={mergeClassNames(className, styles.trigger)}
+      >
+        <BaseSelect.Value className={styles.value} />
+        <BaseSelect.Icon className={styles.icon}>
+          <SvgIcon color="var(--ub-color-text-secondary)" svg={menuDown} />
+        </BaseSelect.Icon>
+      </BaseSelect.Trigger>
+      <BaseSelect.Portal>
+        <BaseSelect.Positioner
+          alignItemWithTrigger={false}
+          className={styles.positioner}
+        >
+          <BaseSelect.Popup className={styles.popup}>
+            {children}
+          </BaseSelect.Popup>
+        </BaseSelect.Positioner>
+      </BaseSelect.Portal>
+    </BaseSelect.Root>
+  );
 }
 
-export type SelectProps = { native?: boolean } & JSX.IntrinsicElements['select'];
+export type SelectOptionProps = Omit<BaseSelect.Item.Props, "value"> & {
+  value?: string;
+};
 
-export const Select = forwardRef(
-  ({ native, ...props }: SelectProps, ref: Ref<HTMLSelectElement>) => {
-    const css = useCSS();
-    const theme = useTheme();
-    const wrapperClass = useMemo(
-      () =>
-        css({
-          position: 'relative',
-        }),
-      [css],
-    );
-    const selectClass = useMemo(
-      () =>
-        css({
-          appearance: 'none',
-          WebkitAppearance: 'none',
-          background: 'transparent',
-          border: `solid 1px ${theme.select.border}`,
-          borderRadius: '4px',
-          color: theme.text.primary,
-          cursor: 'pointer',
-          display: 'block',
-          font: 'inherit',
-          lineHeight: '1.5',
-          padding: `0.5em calc(0.625em + 24px) 0.5em 0.625em`,
-          width: '15em',
-          '&:disabled': {
-            cursor: 'default',
-            opacity: DISABLED_OPACITY,
-          },
-          '&:focus': {
-            boxShadow: `0 0 0 2px ${theme.focus.shadow}`,
-            outline: 'none',
-          },
-        }),
-      [css, theme],
-    );
-    const arrowClass = useMemo(
-      () =>
-        css({
-          pointerEvents: 'none',
-          position: 'absolute',
-          right: '1px',
-          top: 'calc((100% - 24px) / 2)',
-        }),
-      [css],
-    );
-    return (
-      <SelectContext.Provider value={{ native }}>
-        <div class={wrapperClass}>
-          <select {...applyClass(props, selectClass)} ref={ref} />
-          <div class={arrowClass}>
-            <TemplateIcon color={theme.select.arrow} iconSize="24px" url={menuDown} />
-          </div>
-        </div>
-      </SelectContext.Provider>
-    );
-  },
-);
-
-export type SelectOptionProps = JSX.IntrinsicElements['option'];
-
-export const SelectOption = forwardRef((props: SelectOptionProps, ref: Ref<HTMLOptionElement>) => {
-  const { native } = useSelectContext();
-  const css = useCSS();
-  const theme = useTheme();
-  const class_ = useMemo(
-    () =>
-      css({
-        background: native ? 'transparent' : theme.select.optionBackground,
-        color: native ? 'initial' : 'inherit',
-      }),
-    [css, theme, native],
+export function SelectOption({
+  children,
+  className,
+  ...props
+}: SelectOptionProps) {
+  return (
+    <BaseSelect.Item
+      {...props}
+      className={mergeClassNames(className, styles.item)}
+    >
+      <BaseSelect.ItemText>{children}</BaseSelect.ItemText>
+    </BaseSelect.Item>
   );
-  return <option {...applyClass(props, class_)} ref={ref} />;
-});
+}

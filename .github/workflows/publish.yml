@@ -1,0 +1,246 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+        with:
+          # Protect the release build from cache poisoning.
+          cache: false
+
+      - name: Setup changesette
+        uses: iorate/changesette/setup@b370e56da41258dce8313c46a75eb4c5647f0fd6 # v7.2.2
+
+      - name: Prepare release directories
+        run: mkdir -p dist/release/{chrome,edge,firefox,github}
+
+      - name: Build and archive (Chrome)
+        run: |
+          pnpm build
+          (cd dist/chrome && zip -qr ../release/chrome/package.zip .)
+          cp dist/release/chrome/package.zip dist/release/github/chrome.zip
+        env:
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
+
+      - name: Build and archive (Edge)
+        # Edge Add-ons rejects a manifest with the `key` field.
+        run: |
+          pnpm build --browser edge --no-key
+          (cd dist/edge-no-key && zip -qr ../release/edge/package.zip .)
+          pnpm build --browser edge
+          (cd dist/edge && zip -qr ../release/github/edge.zip .)
+        env:
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
+
+      - name: Build and archive (Firefox)
+        run: |
+          pnpm build --browser firefox
+          (cd dist/firefox && zip -qr ../release/firefox/package.zip .)
+          cp dist/release/firefox/package.zip dist/release/github/firefox.zip
+        env:
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
+
+      - name: Build notes
+        run: |
+          changesette get-changelog-entry ublacklist "$(jq -re .version package.json)" \
+            > dist/release/github/release-notes.md
+          # shellcheck disable=SC2016 # envsubst reads $VAR as an allowlist literal
+          envsubst '$RELEASE_URL' \
+            < release/edge/notes-for-certification.template.txt \
+            > dist/release/edge/notes-for-certification.txt
+          cp \
+            release/firefox/approval-notes.txt \
+            dist/release/firefox/
+          pnpm node release/scripts/truncate-release-notes.ts 3000 "$RELEASE_URL" \
+            < dist/release/github/release-notes.md \
+            > dist/release/firefox/release-notes.md
+        env:
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: dist/release
+
+  chrome:
+    needs: build
+
+    environment: chrome
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist/release
+
+      - name: Install wepub
+        uses: iorate/wepub/setup@fc99f54390af6bc8218d1eeda0a994198cd25831 # v1.0.6
+
+      - name: Publish to Chrome Web Store
+        run: wepub chrome dist/release/chrome/package.zip
+        env:
+          WEPUB_CHROME_PUBLISHER_ID: ${{ vars.CHROME_PUBLISHER_ID }}
+          WEPUB_CHROME_ITEM_ID: ${{ vars.CHROME_ITEM_ID }}
+          WEPUB_CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          WEPUB_CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          WEPUB_CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+
+  edge:
+    needs: build
+
+    environment: edge
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist/release
+
+      - name: Install wepub
+        uses: iorate/wepub/setup@fc99f54390af6bc8218d1eeda0a994198cd25831 # v1.0.6
+
+      - name: Publish to Edge Add-ons
+        run: wepub edge dist/release/edge/package.zip --notes-file dist/release/edge/notes-for-certification.txt
+        env:
+          WEPUB_EDGE_PRODUCT_ID: ${{ vars.EDGE_PRODUCT_ID }}
+          WEPUB_EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          WEPUB_EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+
+  firefox:
+    needs: build
+
+    environment: firefox
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Download artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist/release
+
+      - name: Archive source
+        run: |
+          git ls-files --recurse-submodules | zip -q -@ dist/release/firefox/source.zip
+          {
+            echo "DROPBOX_APP_KEY=$DROPBOX_APP_KEY"
+            echo "DROPBOX_APP_SECRET=$DROPBOX_APP_SECRET"
+            echo "GOOGLE_DRIVE_CLIENT_ID=$GOOGLE_DRIVE_CLIENT_ID"
+            echo "GOOGLE_DRIVE_CLIENT_SECRET=$GOOGLE_DRIVE_CLIENT_SECRET"
+            echo "ONEDRIVE_CLIENT_ID=$ONEDRIVE_CLIENT_ID"
+          } > .env
+          zip -q dist/release/firefox/source.zip .env
+          rm .env
+        env:
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
+
+      - name: Install wepub
+        uses: iorate/wepub/setup@fc99f54390af6bc8218d1eeda0a994198cd25831 # v1.0.6
+
+      - name: Publish to Firefox Add-ons
+        run: |
+          wepub firefox dist/release/firefox/package.zip \
+            --channel listed \
+            --compatibility firefox,android \
+            --approval-notes-file dist/release/firefox/approval-notes.txt \
+            --release-notes-file dist/release/firefox/release-notes.md \
+            --source dist/release/firefox/source.zip
+        env:
+          WEPUB_FIREFOX_ADDON_ID: ${{ vars.FIREFOX_ADDON_ID }}
+          WEPUB_FIREFOX_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
+          WEPUB_FIREFOX_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
+
+  github:
+    needs: [build, chrome, edge, firefox]
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist/release
+
+      - name: Generate token
+        id: generate-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BOT_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file dist/release/github/release-notes.md \
+            "dist/release/github/chrome.zip#ublacklist-$GITHUB_REF_NAME-chrome.zip" \
+            "dist/release/github/edge.zip#ublacklist-$GITHUB_REF_NAME-edge.zip" \
+            "dist/release/github/firefox.zip#ublacklist-$GITHUB_REF_NAME-firefox.zip"
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}

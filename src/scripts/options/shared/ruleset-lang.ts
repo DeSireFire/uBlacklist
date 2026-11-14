@@ -1,0 +1,54 @@
+import { LanguageSupport, LRLanguage, syntaxTree } from "@codemirror/language";
+import { type Diagnostic, linter } from "@codemirror/lint";
+import { parseRegExp, parser, parseString } from "@ublacklist/ruleset";
+
+const rulesetLanguage = LRLanguage.define({
+  name: "ruleset",
+  parser,
+  languageData: {
+    commentTokens: { line: "#" },
+  },
+});
+
+function getMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Unknown error";
+}
+
+const rulesetLinter = linter((view) => {
+  const diagnostics: Diagnostic[] = [];
+  syntaxTree(view.state)
+    .cursor()
+    .iterate((node) => {
+      const pushError = (message: string) => {
+        diagnostics.push({
+          from: node.from,
+          to: node.to,
+          severity: "error",
+          message,
+        });
+      };
+      if (node.type.isError) {
+        pushError("Syntax error");
+      } else if (node.name === "String") {
+        try {
+          parseString(view.state.sliceDoc(node.from, node.to));
+        } catch (error) {
+          pushError(getMessage(error));
+        }
+      } else if (node.name === "RegExp") {
+        try {
+          parseRegExp(view.state.sliceDoc(node.from, node.to));
+        } catch (error) {
+          pushError(getMessage(error));
+        }
+      }
+    });
+  return diagnostics;
+});
+
+export function ruleset(): LanguageSupport {
+  return new LanguageSupport(rulesetLanguage, rulesetLinter);
+}

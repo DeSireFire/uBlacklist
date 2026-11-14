@@ -1,0 +1,80 @@
+name: Version
+
+on:
+  push:
+    branches:
+      - master
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup changesette
+        uses: iorate/changesette/setup@b370e56da41258dce8313c46a75eb4c5647f0fd6 # v7.2.2
+
+      - name: Bump version
+        id: version
+        run: |
+          plan="$(changesette version --allow-no-changesets --output -)"
+          if release="$(jq -e '[.releases[] | select(.type != "none")][0]' <<< "$plan")"; then
+            version="$(jq -re '.newVersion' <<< "$release")"
+            echo "title=Release v$version" >> "$GITHUB_OUTPUT"
+            delim="$(openssl rand -hex 16)"
+            {
+              echo "body<<$delim"
+              jq -re '.changelogEntry' <<< "$release"
+              echo "$delim"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "title=Consume changesets" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate token
+        id: generate-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BOT_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Create pull request
+        id: pr
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          branch: changesette/release
+          commit-message: ${{ steps.version.outputs.title }}
+          title: ${{ steps.version.outputs.title }}
+          body: ${{ steps.version.outputs.body }}
+          delete-branch: true
+          sign-commits: true
+
+      - name: Push tag
+        if: steps.pr.outputs.pull-request-number == ''
+        run: |
+          version="$(jq -re .version package.json)"
+          if [[ -z "$(git ls-remote origin "refs/tags/v$version")" ]]; then
+            git tag "v$version"
+            git -c credential.helper='!gh auth git-credential' \
+              push origin "refs/tags/v$version"
+          fi
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}

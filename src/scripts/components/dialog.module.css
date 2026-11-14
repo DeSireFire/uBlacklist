@@ -1,0 +1,29 @@
+.backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  position: fixed;
+  z-index: 100000;
+}
+
+.viewport {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 100000;
+}
+
+.popup {
+  background: var(--ub-color-surface);
+  border-radius: 8px;
+  box-shadow:
+    0 0 16px rgba(0, 0, 0, 0.12),
+    0 16px 16px rgba(0, 0, 0, 0.24);
+  max-height: 100%;
+  max-width: 100%;
+  outline: none;
+  overflow-y: auto;
+  padding: 1.5em;
+  position: relative;
+}
